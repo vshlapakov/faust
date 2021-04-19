@@ -169,11 +169,7 @@ class Fetcher(Service):
     async def _fetcher(self) -> None:
         try:
             consumer = cast(Consumer, self.app.consumer)
-            self._drainer = asyncio.ensure_future(
-                consumer._drain_messages(self),
-                loop=self.loop,
-            )
-            await self._drainer
+            await consumer._drain_messages(self)
         except asyncio.CancelledError:
             pass
         finally:

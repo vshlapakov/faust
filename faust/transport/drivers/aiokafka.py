@@ -501,8 +501,13 @@ class AIOKafkaConsumerThread(ConsumerThread):
     def close(self) -> None:
         """Close consumer for graceful shutdown."""
         if self._consumer is not None:
-            self._consumer.set_close()
-            self._consumer._coordinator.set_close()
+            self._consumer._closed = True
+            asyncio.run_coroutine_threadsafe(
+                self._consumer._client.close(), self.app.loop
+            )
+            asyncio.run_coroutine_threadsafe(
+                self._consumer._coordinator.close(), self.app.loop
+            )
 
     async def subscribe(self, topics: Iterable[str]) -> None:
         """Reset subscription (requires rebalance)."""
@@ -741,9 +746,10 @@ class AIOKafkaConsumerThread(ConsumerThread):
             consumer.seek(tp, offset)
             if offset > 0:
                 self.consumer._read_offset[tp] = offset
-        await asyncio.gather(*[
-            consumer.position(tp) for tp in partitions
-        ])
+        await asyncio.wait_for(
+            asyncio.gather(*[consumer.position(tp) for tp in partitions]),
+            timeout=self.app.conf.broker_request_timeout,
+        )
 
     def seek(self, partition: TP, offset: int) -> None:
         """Seek partition to specific offset."""
